@@ -28,7 +28,7 @@ func TestNew(t *testing.T) {
 		return rec.Result(), nil
 	}})
 	req := &Request{RequestMethod: http.MethodGet, Resource: "links", Method: "promoted"}
-	assert.NoError(t, c.Do(req, nil))
+	assert.NoError(t, c.DoAndParse(req, nil))
 	assert.True(t, call)
 }
 

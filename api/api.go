@@ -76,16 +76,22 @@ func New(appKey, userKey string, transport http.RoundTripper) *Client {
 	return &Client{appKey, userKey, &http.Client{Transport: transport}}
 }
 
-func (c *Client) Do(r *Request, resp interface{}) error {
-	r.ApiParams = append(r.ApiParams, Param{"appkey", c.appKey})
+func (c *Client) Do(r *Request) (*http.Response, error) {
+	newR := *r
+	newR.ApiParams = append([]Param{}, r.ApiParams...)
+	newR.ApiParams = append(newR.ApiParams, Param{"appkey", c.appKey})
 	if r.UserAuth {
-		r.ApiParams = append(r.ApiParams, Param{"userkey", c.userKey})
+		newR.ApiParams = append(newR.ApiParams, Param{"userkey", c.userKey})
 	}
-	req, err := r.Build()
+	req, err := newR.Build()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res, err := c.httpClient.Do(req)
+	return c.httpClient.Do(req)
+}
+
+func (c *Client) DoAndParse(r *Request, resp interface{}) error {
+	res, err := c.Do(r)
 	if err != nil {
 		return err
 	}
@@ -136,7 +142,7 @@ func (r resLinks) Promoted(page int, sort PromotedSort) ([]Link, error) {
 		Method:        "promoted",
 		ApiParams:     []Param{{"page", strconv.Itoa(page)}, {"sort", string(sort)}},
 	}
-	err := r.c.Do(req, &links)
+	err := r.c.DoAndParse(req, &links)
 	return links, err
 }
 
@@ -148,7 +154,7 @@ func (r resLinks) Upcoming(page int, sort UpcomingSort) ([]Link, error) {
 		Method:        "upcoming",
 		ApiParams:     []Param{{"page", strconv.Itoa(page)}, {"sort", string(sort)}},
 	}
-	err := r.c.Do(req, &links)
+	err := r.c.DoAndParse(req, &links)
 	return links, err
 }
 
@@ -161,7 +167,7 @@ func (r resLinks) Index(id int) (*Link, error) {
 		Method:        "index",
 		MethodParams:  []Param{{"param1", strconv.Itoa(id)}},
 	}
-	err := r.c.Do(req, &link)
+	err := r.c.DoAndParse(req, &link)
 	return link, err
 }
 
@@ -170,7 +176,15 @@ func (r resLinks) Comments(id int) ([]*Comment, error) {
 }
 
 func (r resLinks) Reports(id int) ([]*Bury, error) {
-	panic("implement me")
+	var buries []*Bury
+	req := &Request{
+		RequestMethod: http.MethodGet,
+		Resource:      "link",
+		Method:        "reports",
+		MethodParams:  []Param{{"param1", strconv.Itoa(id)}},
+	}
+	err := r.c.DoAndParse(req, &buries)
+	return buries, err
 }
 
 func (r resLinks) Digs(id int) ([]*Dig, error) {
@@ -181,7 +195,7 @@ func (r resLinks) Digs(id int) ([]*Dig, error) {
 		Method:        "digs",
 		MethodParams:  []Param{{"param1", strconv.Itoa(id)}},
 	}
-	err := r.c.Do(req, &digs)
+	err := r.c.DoAndParse(req, &digs)
 	return digs, err
 }
 
@@ -189,8 +203,15 @@ func (r resLinks) Related(id int) ([]*RelatedLink, error) {
 	panic("implement me")
 }
 
-func (r resLinks) BuryReasons() {
-	panic("implement me")
+func (r resLinks) BuryReasons() ([]*BuryReason, error) {
+	var buryReasons []*BuryReason
+	req := &Request{
+		RequestMethod: http.MethodGet,
+		Resource:      "link",
+		Method:        "buryreasons",
+	}
+	err := r.c.DoAndParse(req, &buryReasons)
+	return buryReasons, err
 }
 
 func (c *Client) Links() LinksResource {
@@ -429,6 +450,18 @@ type RelatedLink struct {
 	Link string
 }
 
+/*
+BuryReasons is not documented.
+
+[{"id":1,"name":"duplikat"},{"id":2,"name":"spam"},{"id":3,"name":"informacja nieprawdziwa"},
+{"id":4,"name":"tre\u015b\u0107 nieodpowiednia"},{"id":5,"name":"nie nadaje si\u0119"},
+{"id":6,"name":"nie nadaje si\u0119 do grupy"}]
+*/
+type BuryReason struct {
+	ID   int
+	Name string
+}
+
 type LinkResource interface {
 	Index(id int) (*Link, error)
 	//Dig()
@@ -438,7 +471,7 @@ type LinkResource interface {
 	Reports(id int) ([]*Bury, error)
 	Digs(id int) ([]*Dig, error)
 	Related(id int) ([]*RelatedLink, error)
-	BuryReasons()
+	BuryReasons() ([]*BuryReason, error)
 	//Observe()
 	//Favorite()
 }
