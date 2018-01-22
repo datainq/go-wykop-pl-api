@@ -76,13 +76,17 @@ func New(appKey, userKey string, transport http.RoundTripper) *Client {
 	return &Client{appKey, userKey, &http.Client{Transport: transport}}
 }
 
+func (c *Client) AuthRequest(r *Request) {
+	r.ApiParams = append(r.ApiParams, Param{"appkey", c.appKey})
+	if r.UserAuth {
+		r.ApiParams = append(r.ApiParams, Param{"userkey", c.userKey})
+	}
+}
+
 func (c *Client) Do(r *Request) (*http.Response, error) {
 	newR := *r
 	newR.ApiParams = append([]Param{}, r.ApiParams...)
-	newR.ApiParams = append(newR.ApiParams, Param{"appkey", c.appKey})
-	if r.UserAuth {
-		newR.ApiParams = append(newR.ApiParams, Param{"userkey", c.userKey})
-	}
+	c.AuthRequest(&newR)
 	req, err := newR.Build()
 	if err != nil {
 		return nil, err
